@@ -1,7 +1,6 @@
 from django.db import models
 from django.utils.text import slugify 
-import random
-import string
+import random, string
 # Create your models here.
 
 class Boards(models.Model):
@@ -9,7 +8,7 @@ class Boards(models.Model):
     workspace = models.CharField(max_length=150)
     name = models.CharField(max_length=250)
     description = models.CharField(max_length=200)
-    visibility = models.CharField(default='public', max_length=20)  # Adjust the max_length if needed
+    visibility = models.CharField(default='public', max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
     slug = models.SlugField(unique=True)
     is_active = models.BooleanField(default=True)
@@ -18,9 +17,8 @@ class Boards(models.Model):
         if not self.slug:
             # Combine the name with a random string and some additional words
             random_suffix = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-            
             self.slug = slugify(f"{self.name}-{random_suffix}")
-
+            
         super(Boards, self).save(*args, **kwargs)
         
     def __str__(self):
@@ -34,7 +32,8 @@ class Columns(models.Model):
     
     def __str__(self):
         return self.title
-    
+
+
 class Card(models.Model):
     title = models.CharField(max_length=250)
     description = models.TextField()
@@ -47,7 +46,8 @@ class Card(models.Model):
     
     def __str__(self):
         return self.title
-     
+
+
 class Assignee(models.Model):
     user = models.EmailField()
     card = models.ForeignKey(Card, on_delete=models.CASCADE)
@@ -58,7 +58,7 @@ class Assignee(models.Model):
     def __str__(self):
         return self.card.title
     
-    
+  
 class Comments(models.Model):
     user_id = models.IntegerField()
     user_name = models.CharField(max_length=100, default='name')
@@ -66,10 +66,10 @@ class Comments(models.Model):
     comment = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     
-    
     def __str__(self) -> str:
         return self.comment
-    
+
+   
 class Meeting(models.Model):
     roomID = models.CharField(max_length=255)
     description = models.TextField()

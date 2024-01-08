@@ -25,7 +25,11 @@ SECRET_KEY = 'django-insecure-jr^7_fg0who6vvqnq@lh!+^v5mi9r3q5xu87t0q@ksfuw+8h*&
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', 'backend', 'taskygateway-backend-1', '127.0.0.1', '0.0.0.0']
+ALLOWED_HOSTS = [
+    'docker-taskyflow-microservice-notificationapp-container-1', 'docker-taskyflow-microservice-userservice-container-1', 'docker-taskyflow-microservice-taskservice-container-1', '13.60.18.4', 'localhost:8000', 'localhost:8100',
+    'docker-taskyflow-microservice-apiservice-container-1', 'www.taskyflow.online',  'taskyflow.online', '8100',  '0.0.0.0:8200', '127.0.0.1', '8000',   'localhost',    '127.0.0.1:8200',   '0.0.0.0',
+]
+
 
 # Application definition
 
@@ -46,7 +50,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    
+
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -82,12 +86,11 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': "taskytask",
         'USER': "postgres",
-        "PASSWORD":"1234",
-        "HOST":"taskdb",
-        "PORT":"5432",  
+        "PASSWORD": "1345",
+        "HOST": "docker-taskyflow-microservice-postgres-task-1",
+        "PORT": "5432",
     }
 }
-
 
 
 # Password validation
@@ -131,3 +134,9 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ORIGIN_ALLOW_ALL = True
+
+
+CORS_ALLOWED_ORIGINS = [
+    'https://taskyflow.online', 'https://www.taskyflow.online', 'http://13.60.18.4', "http://localhost:3000",
+    'http://127.0.0.1:9000', 'https://4d9c-103-180-2-229.ngrok-free.app',    'http://localhost:8500',  'http://localhost:8000',
+]

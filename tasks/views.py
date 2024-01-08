@@ -1,32 +1,36 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import BoardSerializer, CardSerailizer, getAllBoardSerializer, getAllColumnSerializer, getAllCardSerializer, getAllAssigneeSerializer, AssigneeSerailizer, CommentsSerializer, GetCommentsSerializer, MeetingSerialzer,GetMeetingSerialzer, ColumnSerializer
+from .serializers import (
+    BoardSerializer, CardSerailizer,
+    getAllColumnSerializer, getAllCardSerializer,
+    getAllAssigneeSerializer, getAllBoardSerializer,
+    AssigneeSerailizer, CommentsSerializer,
+    GetCommentsSerializer, MeetingSerialzer,
+    GetMeetingSerialzer, ColumnSerializer
+)
 from rest_framework.exceptions import ValidationError, AuthenticationFailed
 from .models import Columns, Boards, Assignee, Card, Comments, Meeting
 from django.db.models import Q
-import jwt
-import os
-import json
+import jwt, os, smtplib
 from django.db import transaction
-from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from django.db import IntegrityError
 from dotenv import load_dotenv
 from .producer import publish_to_notification
-import smtplib
 from smtplib import SMTPConnectError
+from datetime import datetime
+
 # Load the stored environment variables
 load_dotenv()
 
 secret_key = os.getenv('SECRET_KEY')
-
 senderEmail = os.getenv('SENDER_EMAIL')
 senderPssword = os.getenv('PASSWORD')
 
-
 def tokenSplit(auth_author):
-    # get access token with bearer, spilt and return teh access token
+    """get access token with bearer, spilt and return teh access token"""
+
     if not auth_author or 'Bearer' not in auth_author:
         raise AuthenticationFailed("Unauthorized User")
     token = auth_author.split('Bearer ')[1]
@@ -34,7 +38,8 @@ def tokenSplit(auth_author):
 
 
 def decode_jwt(token):
-    # decoding the access token
+    """# decoding the access token"""
+
     try:
         payload = jwt.decode(token, secret_key, algorithms=['HS256'])
         return payload
@@ -48,15 +53,13 @@ def decode_jwt(token):
 
 class BoardAction(APIView):
 
-    # Given details, creating board
     def post(self, request):
-        print(request.data, '898989898989898')
+        """Given details, creating board"""
+
         try:
-            print('goin tpo sertialize')
             serialize = BoardSerializer(data=request.data)
             serialize.is_valid(raise_exception=True)
             serialize.save()
-            print(serialize.data, '-----------------------------------------')
             border = Boards.objects.filter(
                 name=serialize.data['name']
             ).first()
@@ -77,10 +80,9 @@ class BoardAction(APIView):
             )
             if serilai.data['visibility'] == 'private':
                 board_to_notification['category'] = 'personal'
-                
-            print(board_to_notification)
             try:
-                publish_to_notification('new board has been created', board_to_notification)
+                publish_to_notification(
+                    'new board has been created', board_to_notification)
             except Exception as e:
                 print(str(e))
 
@@ -92,17 +94,18 @@ class BoardAction(APIView):
             return Response({"error": str(e)})
         except Exception as e:
             return Response({"error": "Something went wrong, try again"})
-    # get all boards
 
     def get(self, request):
+        """get all boards"""
+
         auth_author = request.data.get('auth_author')
         workspace = request.data.get('workspace')
         # spliting the auth_author to get access token
         token = tokenSplit(auth_author)
-
         try:
             payload = decode_jwt(token)  # decoding access token
-            workspace_all_board = Boards.objects.filter(workspace=workspace).filter(is_active = True)
+            workspace_all_board = Boards.objects.filter(
+                workspace=workspace).filter(is_active=True)
             serialize = getAllBoardSerializer(workspace_all_board, many=True)
             return Response({"data": serialize.data})
 
@@ -115,8 +118,9 @@ class BoardAction(APIView):
 
 
 class DeleteBoard(APIView):
+    """Given details, deleteing board"""
+
     def delete(self, request, id=None):
-        print(id)
         auth_author = request.headers.get('authorization')
         token = tokenSplit(auth_author)
         try:
@@ -130,12 +134,13 @@ class DeleteBoard(APIView):
         except Exception as e:
             print(str(e))
             return Response({"error": "Something went wrong"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
 
 class ColumnsAction(APIView):
-    """get all columns"""
 
     def get(self, request):
+        """Given details, get all columns"""
+
         board_slug = request.data.get('board_slug')
         auth_author = request.data.get('auth_author')
         # spliting the auth_author to get access token
@@ -144,7 +149,8 @@ class ColumnsAction(APIView):
             payload = decode_jwt(token)  # decoding access token
             board_obj = Boards.objects.get(slug=board_slug)
             if board_obj:
-                columns_obj = Columns.objects.filter(board_id=board_obj).order_by('position')
+                columns_obj = Columns.objects.filter(
+                    board_id=board_obj).order_by('position')
                 serialzer = getAllColumnSerializer(columns_obj, many=True)
                 return Response(serialzer.data)
 
@@ -156,8 +162,10 @@ class ColumnsAction(APIView):
             return Response({'error': str(e)})
         except Exception as e:
             return Response({"error": "Something went wrong"})
-         
+
     def post(self, request):
+        """Given details, create a column"""
+
         board_id = request.data.pop('boardId')
         auth_author = request.headers.get('authorization')
         token = tokenSplit(auth_author)
@@ -165,7 +173,7 @@ class ColumnsAction(APIView):
             payload = decode_jwt(token)  # decoding access token
             board_obj = Boards.objects.get(id=board_id)
             request.data['board_id'] = board_obj.id
-            serializer = ColumnSerializer(data = request.data)
+            serializer = ColumnSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
@@ -175,7 +183,8 @@ class ColumnsAction(APIView):
         except Exception as e:
             print(str(e))
             return Response({"error": "Something went wrong"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+    # Given details, update column details
     def patch(self, request):
         auth_author = request.headers.get('authorization')
         token = tokenSplit(auth_author)
@@ -184,11 +193,12 @@ class ColumnsAction(APIView):
             board_id = request.data.get('boardID')
             board_obj = Boards.objects.get(id=board_id)
             column_position = request.data.get('position')
-            column_obj = Columns.objects.filter(board_id=board_obj, position=column_position).first()
+            column_obj = Columns.objects.filter(
+                board_id=board_obj, position=column_position).first()
             column_obj.title = request.data.get('title')
             column_obj.save()
             return Response({"success": "column renamed"})
-            
+
         except Boards.DoesNotExist:
             return Response({"error": "Boards not found"})
         except Columns.DoesNotExist:
@@ -196,31 +206,27 @@ class ColumnsAction(APIView):
         except Exception as e:
             print(str(e))
             return Response({"error": "Something went wrong"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        
-        
+
 
 class CardAction(APIView):
 
-    # Given details, creating card
     def post(self, request):
-        print(request.data)
+        """Given details, creating card """
+
         auth_author = request.headers.get('authorization')
         token = tokenSplit(auth_author)
         assignee_details = request.data.pop('assignee', None)
-        print(assignee_details, '888888888888888888888888888888888888888')
         max_members = request.data.get('max_members', None)
         if max_members == None:
             request.data.pop('max_members', None)
             request.data['max_members'] = 1
         try:
-            payload = decode_jwt(token) 
+            payload = decode_jwt(token)
             board_id = request.data.pop('board', None)
             if board_id is not None:
                 board_obj = Boards.objects.get(id=board_id)
                 if board_obj:
                     request.data['board'] = board_obj.id
-                    print(request.data)
                     serialize = CardSerailizer(data=request.data)
                     serialize.is_valid(raise_exception=True)
                     serialize.save()
@@ -240,25 +246,28 @@ class CardAction(APIView):
                                     password = senderPssword
                                     try:
                                         with smtplib.SMTP("smtp.gmail.com", 587) as server:
-                                                server.starttls()
-                                                server.login(sender_email, password)
-                                                server.sendmail(sender_email, receiver_email, message)      
+                                            server.starttls()
+                                            server.login(
+                                                sender_email, password)
+                                            server.sendmail(
+                                                sender_email, receiver_email, message)
                                     except SMTPConnectError:
                                         continue
                                     except Exception as e:
                                         print(str(e))
                                         continue
-                                    
-                                    card_to_notification = { 
-                                        'content' :f"Card has been created with the title {serialize.data['title']}",
-                                        'type' :'Card Creation',
-                                        'workspace' : 'None',
-                                        'category' : 'personal',
-                                        'userMail' : email
-                                      }
-                                
+
+                                    card_to_notification = {
+                                        'content': f"Card has been created with the title {serialize.data['title']}",
+                                        'type': 'Card Creation',
+                                        'workspace': 'None',
+                                        'category': 'personal',
+                                        'userMail': email
+                                    }
+
                                     try:
-                                        publish_to_notification('new card has been created', card_to_notification)
+                                        publish_to_notification(
+                                            'new card has been created', card_to_notification)
                                     except Exception as e:
                                         print(str(e))
                                         continue
@@ -267,9 +276,8 @@ class CardAction(APIView):
                             assignee_data = Assignee.objects.filter(
                                 card=card).values()
                             new_assignee_data = list(assignee_data.values())
-                            # new_assignee_data_json = json.dumps(
-                            #     new_assignee_data)
-                            seria = getAllAssigneeSerializer(new_assignee_data, many=True)
+                            seria = getAllAssigneeSerializer(
+                                new_assignee_data, many=True)
                             data = {'card': serialize.data,
                                     'assignee': seria.data}
                             return Response(data)
@@ -288,13 +296,13 @@ class CardAction(APIView):
             print(str(e))
             return Response({"error": "Something went wrong"})
 
-    # Get all cards
     def get(self, request):
+        """Get all cards"""
+
         board_slug = request.data.get('board_slug')
         auth_author = request.data.get('auth_author')
         # spliting the auth_author to get access token
         token = tokenSplit(auth_author)
-
         try:
             payload = decode_jwt(token)  # decoding access token
             board_obj = Boards.objects.filter(slug=board_slug).first()
@@ -323,8 +331,9 @@ class CardAction(APIView):
             print(str(e))
             return Response({"error": "Something went wrong"})
 
-    # Given details for card dragging, update card
     def patch(self, request):
+        """Given details for card dragging, update card"""
+
         card_id = request.data.get('card_id')
         column_id = request.data.get('column_id')
         auth_author = request.data.get('auth_author')
@@ -337,7 +346,6 @@ class CardAction(APIView):
                 card_obj.column = column_id
                 card_obj.save()
                 serializer = getAllCardSerializer(card_obj)
-                print(serializer.data)
                 return Response(serializer.data)
         except Card.DoesNotExist as e:
             return Response({"error": "There is no card for the columns"}, status=status.HTTP_404_NOT_FOUND)
@@ -346,22 +354,20 @@ class CardAction(APIView):
 
 
 class CardEditUpdate(APIView):
+    """Given details, update card details"""
+
     def patch(self, request):
-        print(request.data)
-        print(request.data.get('updatedData'))
-        print(request.data.get('cardId'))
         card_id = request.data.get('cardId')
-        
         card_data = request.data.get('updatedData')
         auth_author = request.headers.get('authorization')
         token = tokenSplit(auth_author)
         try:
             payload = decode_jwt(token)  # decoding access token
             card_obj = Card.objects.get(id=card_id)
-            
+
             for key, value in card_data.items():
                 setattr(card_obj, key, value)
-                
+
             with transaction.atomic():
                 card_obj.save()
 
@@ -372,8 +378,6 @@ class CardEditUpdate(APIView):
         except Exception as e:
             print(str(e))
             return Response({"error": "Something went wrong"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 
 class CardDeletion(APIView):
@@ -396,13 +400,12 @@ class CardDeletion(APIView):
             return Response({"error": "Something went wrong"})
 
 
-
 class AddAssignee(APIView):
+    """Given details, create assignee"""
+
     def post(self, request):
-        
         card_id = request.data.get('card_id')
         user_emails = request.data.get('selectedEmails')
-        print(user_emails, 'user_emailsuser_emailsuser_emailsuser_emails')
         auth_author = request.headers.get('authorization')
         token = tokenSplit(auth_author)
         try:
@@ -414,21 +417,19 @@ class AddAssignee(APIView):
                 card_data = {'user': user, 'card': card_obj.id}
                 serialize = AssigneeSerailizer(data=card_data)
                 for email in user_emails:
-                    
-                    assignee_card_to_notification = { 
-                        'content' :f"You have been assigned to a card '{card_obj.title}'",
-                        'type' :'Assigned to Card',
-                        'workspace' : 'None',
-                        'category' : 'personal',
-                        'userMail' : email
+                    assignee_card_to_notification = {
+                        'content': f"You have been assigned to a card '{card_obj.title}'",
+                        'type': 'Assigned to Card',
+                        'workspace': 'None',
+                        'category': 'personal',
+                        'userMail': email
                     }
-                    print(assignee_card_to_notification)             
                     try:
-                        publish_to_notification('new card has been created to you', assignee_card_to_notification)
+                        publish_to_notification(
+                            'new card has been created to you', assignee_card_to_notification)
                     except Exception as e:
                         print(str(e))
                         continue
-                
                 try:
                     serialize.is_valid(raise_exception=True)
                     serialize.save()
@@ -438,9 +439,10 @@ class AddAssignee(APIView):
                     password = senderPssword
                     try:
                         with smtplib.SMTP("smtp.gmail.com", 587) as server:
-                                server.starttls()
-                                server.login(sender_email, password)
-                                server.sendmail(sender_email, receiver_email, message)      
+                            server.starttls()
+                            server.login(sender_email, password)
+                            server.sendmail(
+                                sender_email, receiver_email, message)
                     except SMTPConnectError:
                         continue
                     except Exception as e:
@@ -448,9 +450,7 @@ class AddAssignee(APIView):
                         continue
                     new_assignee_data.append(serialize.data)
                 except serializers.ValidationError as validation_error:
-                    # Handle the validation error (e.g., log it)
                     print(f"ValidationError: {validation_error}")
-                    print("---------------------------------------")
                     error_message = str(e.detail.get('non_field_errors', ''))
                     if 'unique' in error_message.lower():
                         return Response({"error": "Member with this name already exists"}, status=status.HTTP_400_BAD_REQUEST)
@@ -485,7 +485,10 @@ class AssigneeDeleteion(APIView):
             print(str(e))
             return Response({"error": "Something went wrong"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 class CommentAction(APIView):
+    """Given details, create comment for card"""
+
     def post(self, request, id=None):
         auth_author = request.headers.get('authorization')
         token = tokenSplit(auth_author)
@@ -498,12 +501,15 @@ class CommentAction(APIView):
             serialize.is_valid(raise_exception=True)
             serialize.save()
             return Response(serialize.data)
-        
+
         except Exception as e:
             print(str(e))
             return Response({"error": "Something went wrong"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+
 class GetComments(APIView):
+    """Given details, get the comments details"""
+
     def get(self, request):
         card_id = request.data.get('card_id')
         auth_author = request.headers.get('authorization')
@@ -511,9 +517,9 @@ class GetComments(APIView):
         try:
             payload = decode_jwt(token)  # decoding access token
             card_obj = Card.objects.get(id=card_id)
-            comment_obj = Comments.objects.filter(card=card_obj.id).order_by('-created_at')
+            comment_obj = Comments.objects.filter(
+                card=card_obj.id).order_by('-created_at')
             serializer = GetCommentsSerializer(comment_obj, many=True)
-            print(serializer.data, '---------------------------------------------')
             return Response(serializer.data)
         except Card.DoesNotExist as e:
             print(str(e))
@@ -524,15 +530,14 @@ class GetComments(APIView):
         except Exception as e:
             print(str(e))
             return Response({"error": "Something went wrong"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
 
 
 class CreateMeeting(APIView):
+    """Given details, create meeting"""
+
     def post(self, request):
         meeting_details = request.data
-        print(meeting_details, '-------')
         date_time_str = request.data.get('starting_time')
-
         roomID = request.data.pop('roomID')
         removeSpace_roomID = roomID.replace(" ", "")
         request.data['roomID'] = removeSpace_roomID
@@ -543,55 +548,50 @@ class CreateMeeting(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-   
-      
-        
-from datetime import datetime   
+
+
 class MeetingAction(APIView):
+    """Given details, get the meeting details"""
+
     def get(self, request):
         workspace = request.data.get('workspace')
         auth_author = request.headers.get('authorization')
-        token = tokenSplit(auth_author) #spliting the auth_author to get access token
-        
+        # spliting the auth_author to get access token
+        token = tokenSplit(auth_author)
+
         if token:
-            payload = decode_jwt(token) #decoding access token
+            payload = decode_jwt(token)  # decoding access token
             try:
                 now = datetime.now()
                 timestamp = datetime.timestamp(now)
                 meeting_data = Meeting.objects.filter(
                     workspace=workspace,
-                    expiration_time__gt = timestamp,
-                    ).filter(is_active=True)
+                    expiration_time__gt=timestamp,
+                ).filter(is_active=True)
 
                 serialize = GetMeetingSerialzer(meeting_data, many=True)
-                print(serialize.data, 'serialize.dataserialize.dataserialize.data')
                 return Response(serialize.data)
             except Meeting.DoesNotExist:
-                return Response ({"error": "Meetings doesnot exists under this workspace"})
+                return Response({"error": "Meetings doesnot exists under this workspace"})
         else:
-            return Response({"error": 'Unauthorized Access, Token required'})   
-        
+            return Response({"error": 'Unauthorized Access, Token required'})
+
+
 class DeleteMeeting(APIView):
+    """Given details, delete(inactive) the meeting """
+
     def delete(self, request, id=None):
-        print(id)
-        print('--------------------------------------------')
         auth_author = request.headers.get('authorization')
-        token = tokenSplit(auth_author) #spliting the auth_author to get access token
-        
+        # spliting the auth_author to get access token
+        token = tokenSplit(auth_author)
         if token:
             try:
-                payload = decode_jwt(token) #decoding access token
+                payload = decode_jwt(token)  # decoding access token
                 meeting_obj = Meeting.objects.get(id=id)
                 meeting_obj.is_active = False
                 meeting_obj.save()
-                print(meeting_obj)
                 return Response({"success": "Meeting has been deleted"})
             except Meeting.DoesNotExist:
-                return Response ({"error": "Meetings doesnot exists under this workspace"})
+                return Response({"error": "Meetings doesnot exists under this workspace"})
         else:
-            return Response({"error": 'Unauthorized Access, Token required'})  
-            
-            
-            
-        
-        
+            return Response({"error": 'Unauthorized Access, Token required'})
